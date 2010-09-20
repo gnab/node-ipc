@@ -1,13 +1,15 @@
 var net = require('net');
 
 var socketPath = '/tmp/node-ipc.sock';
-var clients = [];
+var clients = {};
+var pids = [];
 
-createClient();
+module.exports.createClient = createClient;
 
 function createServer () {
   console.log('Creating server...');
   clients = {};
+  pids = [];
 
   var server = net.createServer(function(stream) {
     stream.setEncoding('utf8');
@@ -15,6 +17,7 @@ function createServer () {
       console.log('Connect event');
     });
     stream.on('data', function(data) {
+      console.log('Data from client: ' + data);
       var parsedData = JSON.parse(data);
       clients[parsedData.pid] = stream;
 
@@ -49,13 +52,14 @@ function createClient() {
   });
 
   client.on('data', function(data) {
+    console.log('Data from server: ' + data);
     var json = JSON.parse(data);
-    clients = json.pids;
+    pids = json.pids;
   });
 
   client.on('error', function() {
-    if (!clients.length || 
-	parseInt(clients[0], 10) === process.pid) {
+    if (!pids.length || 
+	parseInt(pids[0], 10) === process.pid) {
       createServer();
     }
     else {
@@ -72,8 +76,12 @@ function broadcastPids() {
     pids.push(pid);
   };
 
+  var jsonStr = JSON.stringify({pids: pids});
+
+  console.log('Broadcasting pids: ' + jsonStr);
+
   for (var pid in clients) {
-    clients[pid].write(JSON.stringify({pids: pids}));
+    clients[pid].write(jsonStr);
   }
 }
 
@@ -87,3 +95,7 @@ function removeClientStream(stream) {
     }
   }
 }
+
+var actions = {
+  msg: function(data) {}
+};
